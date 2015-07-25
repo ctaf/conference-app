@@ -77,7 +77,7 @@ class SessionForm(messages.Message):
     """SessionForm -- Session outbound form message"""
     name            = messages.StringField(1)
     highlights     = messages.StringField(2, repeated=True)
-    speakers          = messages.IntegerField(3, repeated=True)
+    speakers          = messages.StringField(3, repeated=True)
     typeOfSession      = messages.StringField(4)
     date       = messages.StringField(5)
     startTime       = messages.StringField(6)
