@@ -136,8 +136,8 @@ class ConferenceApi(remote.Service):
                 if field.name in ('date', 'startTime'):
                     setattr(cf, field.name, str(getattr(sess, field.name)))
                 # convert speaker objects to strings for SessionForm
-                elif field.name == 'speakers':
-                    setattr(cf, field.name, map(str, field.name))
+                # elif field.name == 'speakers':
+                #     setattr(cf, field.name, map(str, getattr(sess, field.name)))
                 else:
                     setattr(cf, field.name, getattr(sess, field.name))
         cf.check_initialized()
@@ -362,7 +362,7 @@ class ConferenceApi(remote.Service):
 
 
     @endpoints.method(SESS_GET_REQUEST, SessionForms,
-            path='nession/{speakerId}',
+            path='speakers/{speakerId}',
             http_method='GET', name='getSessionsBySpeaker')
     def getSessionsBySpeaker(self, request):
         """Return all sessions given by a particular speaker."""
@@ -373,7 +373,7 @@ class ConferenceApi(remote.Service):
 
         # create query for all key matches for this speaker
         print 'speakerId: ', request.speakerId
-        sessions = Session.query(Session.speakers.id == request.speakerId)
+        sessions = Session.query(Session.speakers.IN([request.speakerId]))
         print 'sessions: ', sessions
         print sessions.get()
         # return set of SessionForm objects per Session
