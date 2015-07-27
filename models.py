@@ -51,6 +51,11 @@ class WishlistForm(messages.Message):
     sessionWishlist = messages.StringField(1, repeated=True)
 
 
+class MultiStringMessage(messages.Message):
+    """StringMessage-- outbound (single) string message"""
+    data = messages.StringField(1, repeated=True)
+
+
 class StringMessage(messages.Message):
     """StringMessage-- outbound (single) string message"""
     data = messages.StringField(1, required=True)
@@ -64,7 +69,7 @@ class BooleanMessage(messages.Message):
 class Speaker(ndb.Model):
     """Speaker -- Speaker object"""
     name            = ndb.StringProperty(required=True)
-    id = ndb.IntegerProperty()
+    # id = ndb.IntegerProperty()
     email = ndb.StringProperty()
 
 
@@ -72,7 +77,7 @@ class Session(ndb.Model):
     """Session -- Session object"""
     name            = ndb.StringProperty(required=True)
     highlights     = ndb.StringProperty(repeated=True)
-    speakers          = ndb.IntegerProperty(repeated=True)
+    speakers          = ndb.StringProperty(repeated=True)
     typeOfSession            = ndb.StringProperty()
     date       = ndb.DateProperty()
     startTime       = ndb.TimeProperty()

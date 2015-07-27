@@ -29,11 +29,11 @@ from models import Profile
 from models import ProfileMiniForm
 from models import ProfileForm
 from models import StringMessage
+from models import MultiStringMessage
 from models import BooleanMessage
 from models import Session
 from models import SessionForm
 from models import SessionForms
-from models import WishlistForm
 from models import Conference
 from models import ConferenceForm
 from models import ConferenceForms
@@ -91,7 +91,7 @@ TYPE_GET_REQUEST = endpoints.ResourceContainer(
 )
 
 WISH_POST_REQUEST = endpoints.ResourceContainer(
-    WishlistForm,
+    MultiStringMessage,
     sessionKey=messages.StringField(1),
 )
 
@@ -102,7 +102,7 @@ CONF_POST_REQUEST = endpoints.ResourceContainer(
 
 SESS_GET_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
-    speakerId=messages.IntegerField(1),
+    websafeSpeakerKey=messages.StringField(1),
 )
 
 SESS_POST_REQUEST = endpoints.ResourceContainer(
@@ -236,18 +236,18 @@ class ConferenceApi(remote.Service):
                         "%I:%M %p").time()
             elif value and field.name == 'speakers':
                 data['speakers'] = []
-                first, last = Conference.allocate_ids(size=len(value))
-                ids = range(first, last+1)
+                # first, last = Conference.allocate_ids(size=len(value))
+                # ids = range(first, last+1)
                 speakers = {sp.name: sp for sp in Speaker.query()}
 
                 for name in value:
                     known_speaker = speakers.get(name)
                     if not known_speaker:
-                        new_id = ids.pop()
-                        Speaker(name=name, id=new_id).put()
-                        data['speakers'].append(new_id)
+                        # new_id = ids.pop()
+                        s_key = Speaker(name=name).put()
+                        data['speakers'].append(s_key.urlsafe())
                     else:
-                        data['speakers'].append(known_speaker.id)
+                        data['speakers'].append(known_speaker.key.urlsafe())
 
             else:
                 data[field.name] = value
@@ -370,16 +370,19 @@ class ConferenceApi(remote.Service):
         return sessions
 
 
-    @endpoints.method(CONF_GET_REQUEST, SessionForms,
-            path='speakers/{websafeConferenceKey}',
+    @endpoints.method(CONF_GET_REQUEST, MultiStringMessage,
+            path='bla/{websafeConferenceKey}',
             http_method='GET', name='getConferenceSpeakers')
     def getConferenceSpeakers(self, request):
         """Return all sessions of a conference (by websafeConferenceKey)."""
-        sessions = self._getSessions(request.websafeConferenceKey)
+        sessions = self._getSessions(request.websafeConferenceKey
+                   ).fetch(projection=[Session.speakers])
 
-        return SessionForms(
-            items=[self._copySessionToForm(sess) for sess in sessions]
-        )
+        unique_sp = set([sp for sess in sessions for sp in
+            sess.speakers])
+
+        speakers = ndb.get_multi((ndb.Key(urlsafe=k) for k in unique_sp))
+        return MultiStringMessage(data=[sp.name for sp in speakers])
 
 
     @endpoints.method(CONF_GET_REQUEST, SessionForms,
@@ -411,7 +414,7 @@ class ConferenceApi(remote.Service):
         )
 
 
-    @endpoints.method(message_types.VoidMessage, WishlistForm,
+    @endpoints.method(message_types.VoidMessage, MultiStringMessage,
             http_method='GET', name='getSessionsInWishlist')
     def getSessionsInWishlist(self, request):
         """Get all sessions from the user's wishlist."""
@@ -420,14 +423,13 @@ class ConferenceApi(remote.Service):
 
         wish_keys = [ndb.Key(urlsafe=wsck) for wsck in
                 profile.sessionWishlist]
-        wish_sessions = ndb.get_multi(wish_keys
-                )
+        wish_sessions = ndb.get_multi(wish_keys)
         session_names = [s.name for s in wish_sessions]
 
-        return WishlistForm(sessionWishlist=session_names)
+        return MultiStringMessage(data=session_names)
 
 
-    @endpoints.method(message_types.VoidMessage, WishlistForm,
+    @endpoints.method(message_types.VoidMessage, MultiStringMessage,
             http_method='GET', name='getNonWorkshops')
     def getNonWorkshops(self, request):
         """Get non-workshop sessions starting before 7pm."""
@@ -440,10 +442,10 @@ class ConferenceApi(remote.Service):
 
         sessions = ndb.get_multi((ndb.Key(urlsafe=s) for s in intersect))
         session_names = [s.name for s in sessions]
-        return WishlistForm(sessionWishlist=session_names)
+        return MultiStringMessage(data=session_names)
 
 
-    @endpoints.method(WISH_POST_REQUEST, WishlistForm,
+    @endpoints.method(WISH_POST_REQUEST, MultiStringMessage,
             path='wishlist/{sessionKey}',
             http_method='POST', name='addSessionToWishlist')
     def addSessionToWishlist(self, request):
@@ -461,21 +463,18 @@ class ConferenceApi(remote.Service):
         profile.sessionWishlist.append(request.sessionKey)
         profile.put()
 
-        return WishlistForm(sessionWishlist=profile.sessionWishlist)
+        return MultiStringMessage(data=profile.sessionWishlist)
 
 
     @endpoints.method(SESS_GET_REQUEST, SessionForms,
-            path='speakers/{speakerId}',
+            path='speakers/{websafeSpeakerKey}',
             http_method='GET', name='getSessionsBySpeaker')
     def getSessionsBySpeaker(self, request):
         """Return all sessions given by a particular speaker."""
         # make sure user is authed
         check_current_user()
         # create query for all key matches for this speaker
-        print 'speakerId: ', request.speakerId
-        sessions = Session.query(Session.speakers.IN([request.speakerId]))
-        print 'sessions: ', sessions
-        print sessions.get()
+        sessions = Session.query(Session.speakers.IN([request.websafeSpeakerKey]))
         # return set of SessionForm objects per Session
         return SessionForms(
             items=[self._copySessionToForm(sess) for sess in sessions]
