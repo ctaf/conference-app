@@ -13,7 +13,7 @@ created by wesc on 2014 apr 21
 __author__ = 'wesc+api@google.com (Wesley Chun)'
 
 
-from datetime import datetime
+import datetime
 
 import endpoints
 from protorpc import messages
@@ -187,12 +187,14 @@ class ConferenceApi(remote.Service):
 
         # convert dates from strings to Date objects; set month based on start_date
         if data['startDate']:
-            data['startDate'] = datetime.strptime(data['startDate'][:10], "%Y-%m-%d").date()
+            data['startDate'] = datetime.datetime.strptime(data['startDate'][:10],
+                    "%Y-%m-%d").date()
             data['month'] = data['startDate'].month
         else:
             data['month'] = 0
         if data['endDate']:
-            data['endDate'] = datetime.strptime(data['endDate'][:10], "%Y-%m-%d").date()
+            data['endDate'] = datetime.datetime.strptime(data['endDate'][:10],
+                    "%Y-%m-%d").date()
 
         # set seatsAvailable to be same as maxAttendees on creation
         if data["maxAttendees"] > 0:
@@ -227,9 +229,11 @@ class ConferenceApi(remote.Service):
             value = getattr(request, field.name)
             # value might be None, if not provided on creation
             if value and field.name == 'date':
-                data['date'] = datetime.strptime(value, "%Y-%m-%d").date()
+                data['date'] = datetime.datetime.strptime(value,
+                        "%Y-%m-%d").date()
             elif value and field.name == 'startTime':
-                data['startTime'] = datetime.strptime(value, "%I:%M %p").time()
+                data['startTime'] = datetime.datetime.strptime(value,
+                        "%I:%M %p").time()
             elif value and field.name == 'speakers':
                 data['speakers'] = []
                 first, last = Conference.allocate_ids(size=len(value))
@@ -307,7 +311,7 @@ class ConferenceApi(remote.Service):
             if data not in (None, []):
                 # special handling for dates (convert string to Date)
                 if field.name in ('startDate', 'endDate'):
-                    data = datetime.strptime(data, "%Y-%m-%d").date()
+                    data = datetime.datetime.strptime(data, "%Y-%m-%d").date()
                     if field.name == 'startDate':
                         conf.month = data.month
                 # write to Conference object
@@ -411,6 +415,22 @@ class ConferenceApi(remote.Service):
         return WishlistForm(sessionWishlist=session_names)
 
 
+    @endpoints.method(message_types.VoidMessage, WishlistForm,
+            http_method='GET', name='getNonWorkshops')
+    def getNonWorkshops(self, request):
+        """Get non-workshop sessions starting before 7pm."""
+
+        check_current_user()
+        non_workshop = Session.query(Session.typeOfSession != 'workshop')
+        before_seven = Session.query(Session.startTime <= datetime.time(19, 0))
+        intersect = set([n.key.urlsafe() for n in non_workshop]
+                ) & set([b.key.urlsafe() for b in before_seven])
+
+        sessions = ndb.get_multi((ndb.Key(urlsafe=s) for s in intersect))
+        session_names = [s.name for s in sessions]
+        return WishlistForm(sessionWishlist=session_names)
+
+
     @endpoints.method(WISH_POST_REQUEST, WishlistForm,
             path='wishlist/{sessionKey}',
             http_method='POST', name='addSessionToWishlist')
@@ -451,8 +471,26 @@ class ConferenceApi(remote.Service):
 
 
     @endpoints.method(message_types.VoidMessage, ConferenceForms,
+            path='upcoming',
+            http_method='GET', name='getUpcomingConferences')
+    def getUpcomingConferences(self, request):
+        """Return conferences created by user."""
+        # make sure user is authed
+        check_current_user()
+
+        cur_mo = datetime.datetime.now().month
+        confs = Conference.query(Conference.month >= cur_mo,
+                Conference.month <= cur_mo + 1)
+        # prof = ndb.Key(Profile, user_id).get()
+        # return set of ConferenceForm objects per Conference
+        return ConferenceForms(
+            items=[self._copyConferenceToForm(conf, '') for conf in confs]
+        )
+
+
+    @endpoints.method(message_types.VoidMessage, ConferenceForms,
             path='getConferencesCreated',
-            http_method='POST', name='getConferencesCreated')
+            http_method='GET', name='getConferencesCreated')
     def getConferencesCreated(self, request):
         """Return conferences created by user."""
         # make sure user is authed

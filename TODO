@@ -1,3 +1,5 @@
 * test on multiple conferences
 * rethink speaker design, maybe include both speaker.name and speaker.id in
   session
+* clean code from unnecessary parts, e.g. unneeded properties of conference
+  model
