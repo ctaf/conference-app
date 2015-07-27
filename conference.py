@@ -371,6 +371,18 @@ class ConferenceApi(remote.Service):
 
 
     @endpoints.method(CONF_GET_REQUEST, SessionForms,
+            path='speakers/{websafeConferenceKey}',
+            http_method='GET', name='getConferenceSpeakers')
+    def getConferenceSpeakers(self, request):
+        """Return all sessions of a conference (by websafeConferenceKey)."""
+        sessions = self._getSessions(request.websafeConferenceKey)
+
+        return SessionForms(
+            items=[self._copySessionToForm(sess) for sess in sessions]
+        )
+
+
+    @endpoints.method(CONF_GET_REQUEST, SessionForms,
             path='session/{websafeConferenceKey}',
             http_method='GET', name='getConferenceSessions')
     def getConferenceSessions(self, request):
