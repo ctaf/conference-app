@@ -27,22 +27,28 @@ class Profile(ndb.Model):
     """Profile -- User profile object"""
     displayName = ndb.StringProperty()
     mainEmail = ndb.StringProperty()
-    teeShirtSize = ndb.StringProperty(default='NOT_SPECIFIED')
+    # teeShirtSize = ndb.StringProperty(default='NOT_SPECIFIED')
+    sessionWishlist = ndb.StringProperty(repeated=True)
     conferenceKeysToAttend = ndb.StringProperty(repeated=True)
 
 
 class ProfileMiniForm(messages.Message):
     """ProfileMiniForm -- update Profile form message"""
     displayName = messages.StringField(1)
-    teeShirtSize = messages.EnumField('TeeShirtSize', 2)
+    # teeShirtSize = messages.EnumField('TeeShirtSize', 2)
 
 
 class ProfileForm(messages.Message):
     """ProfileForm -- Profile outbound form message"""
     displayName = messages.StringField(1)
     mainEmail = messages.StringField(2)
-    teeShirtSize = messages.EnumField('TeeShirtSize', 3)
+    # teeShirtSize = messages.EnumField('TeeShirtSize', 3)
     conferenceKeysToAttend = messages.StringField(4, repeated=True)
+
+
+class WishlistForm(messages.Message):
+    """WishlistForm -- basic form for session wishlist manipulation."""
+    sessionWishlist = messages.StringField(1, repeated=True)
 
 
 class StringMessage(messages.Message):
@@ -124,23 +130,23 @@ class ConferenceForms(messages.Message):
     items = messages.MessageField(ConferenceForm, 1, repeated=True)
 
 
-class TeeShirtSize(messages.Enum):
-    """TeeShirtSize -- t-shirt size enumeration value"""
-    NOT_SPECIFIED = 1
-    XS_M = 2
-    XS_W = 3
-    S_M = 4
-    S_W = 5
-    M_M = 6
-    M_W = 7
-    L_M = 8
-    L_W = 9
-    XL_M = 10
-    XL_W = 11
-    XXL_M = 12
-    XXL_W = 13
-    XXXL_M = 14
-    XXXL_W = 15
+# class TeeShirtSize(messages.Enum):
+#     """TeeShirtSize -- t-shirt size enumeration value"""
+#     NOT_SPECIFIED = 1
+#     XS_M = 2
+#     XS_W = 3
+#     S_M = 4
+#     S_W = 5
+#     M_M = 6
+#     M_W = 7
+#     L_M = 8
+#     L_W = 9
+#     XL_M = 10
+#     XL_W = 11
+#     XXL_M = 12
+#     XXL_W = 13
+#     XXXL_M = 14
+#     XXXL_W = 15
 
 
 class ConferenceQueryForm(messages.Message):

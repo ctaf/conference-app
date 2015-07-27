@@ -33,12 +33,13 @@ from models import BooleanMessage
 from models import Session
 from models import SessionForm
 from models import SessionForms
+from models import WishlistForm
 from models import Conference
 from models import ConferenceForm
 from models import ConferenceForms
 from models import ConferenceQueryForm
 from models import ConferenceQueryForms
-from models import TeeShirtSize
+# from models import TeeShirtSize
 from models import Speaker
 
 from settings import WEB_CLIENT_ID
@@ -89,6 +90,11 @@ TYPE_GET_REQUEST = endpoints.ResourceContainer(
     sessionType=messages.StringField(2),
 )
 
+WISH_POST_REQUEST = endpoints.ResourceContainer(
+    WishlistForm,
+    sessionKey=messages.StringField(1),
+)
+
 CONF_POST_REQUEST = endpoints.ResourceContainer(
     ConferenceForm,
     websafeConferenceKey=messages.StringField(1),
@@ -105,6 +111,15 @@ SESS_POST_REQUEST = endpoints.ResourceContainer(
 )
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Helper functions
+
+
+def check_current_user():
+    user = endpoints.get_current_user()
+    if not user:
+        raise endpoints.UnauthorizedException('Authorization required')
+    else:
+        return user
 
 
 @endpoints.api(name='conference', version='v1', audiences=[ANDROID_AUDIENCE],
@@ -153,9 +168,7 @@ class ConferenceApi(remote.Service):
         """Create or update Conference object, returning
         ConferenceForm/request."""
         # preload necessary data items
-        user = endpoints.get_current_user()
-        if not user:
-            raise endpoints.UnauthorizedException('Authorization required')
+        user = check_current_user()
         user_id = getUserId(user)
 
         if not request.name:
@@ -204,9 +217,7 @@ class ConferenceApi(remote.Service):
 
     def _createSessionObject(self, request):
         """Create or update Conference object, returning ConferenceForm/request."""
-        user = endpoints.get_current_user()
-        if not user:
-            raise endpoints.UnauthorizedException('Authorization required')
+        user = check_current_user()
         user_id = getUserId(user)
 
         # copy ConferenceForm/ProtoRPC Message into dict
@@ -260,19 +271,17 @@ class ConferenceApi(remote.Service):
         # creation of Conference & return (modified) ConferenceForm
         sess = Session(**data)
         sess.put()
-        taskqueue.add(params={'email': user.email(),
-            'SessionInfo': repr(request)},
-            url='/tasks/send_confirmation_email'
-        )
+        # taskqueue.add(params={'email': user.email(),
+        #     'SessionInfo': repr(request)},
+        #     url='/tasks/send_confirmation_email'
+        # )
 
         return self._copySessionToForm(sess)
 
 
     @ndb.transactional()
     def _updateConferenceObject(self, request):
-        user = endpoints.get_current_user()
-        if not user:
-            raise endpoints.UnauthorizedException('Authorization required')
+        user = check_current_user()
         user_id = getUserId(user)
 
         # copy ConferenceForm/ProtoRPC Message into dict
@@ -386,16 +395,50 @@ class ConferenceApi(remote.Service):
         )
 
 
+    @endpoints.method(message_types.VoidMessage, WishlistForm,
+            http_method='GET', name='getSessionsInWishlist')
+    def getSessionsInWishlist(self, request):
+        """Get all sessions from the user's wishlist."""
+        check_current_user()
+        profile = self._getProfileFromUser(makeNew=False)
+
+        wish_keys = [ndb.Key(urlsafe=wsck) for wsck in
+                profile.sessionWishlist]
+        wish_sessions = ndb.get_multi(wish_keys
+                )
+        session_names = [s.name for s in wish_sessions]
+
+        return WishlistForm(sessionWishlist=session_names)
+
+
+    @endpoints.method(WISH_POST_REQUEST, WishlistForm,
+            path='wishlist/{sessionKey}',
+            http_method='POST', name='addSessionToWishlist')
+    def addSessionToWishlist(self, request):
+        """Adds the session to the current user's wishlist."""
+        check_current_user()
+        profile = self._getProfileFromUser(makeNew=False)
+
+        # check if session was already added
+        if request.sessionKey in profile.sessionWishlist:
+            raise ConflictException(
+                "This session is already on your wishlist.")
+
+        # add session to wishlist
+        # profile.sessionWishlist = []
+        profile.sessionWishlist.append(request.sessionKey)
+        profile.put()
+
+        return WishlistForm(sessionWishlist=profile.sessionWishlist)
+
+
     @endpoints.method(SESS_GET_REQUEST, SessionForms,
             path='speakers/{speakerId}',
             http_method='GET', name='getSessionsBySpeaker')
     def getSessionsBySpeaker(self, request):
         """Return all sessions given by a particular speaker."""
         # make sure user is authed
-        user = endpoints.get_current_user()
-        if not user:
-            raise endpoints.UnauthorizedException('Authorization required')
-
+        check_current_user()
         # create query for all key matches for this speaker
         print 'speakerId: ', request.speakerId
         sessions = Session.query(Session.speakers.IN([request.speakerId]))
@@ -413,9 +456,7 @@ class ConferenceApi(remote.Service):
     def getConferencesCreated(self, request):
         """Return conferences created by user."""
         # make sure user is authed
-        user = endpoints.get_current_user()
-        if not user:
-            raise endpoints.UnauthorizedException('Authorization required')
+        user = check_current_user()
         user_id = getUserId(user)
 
         # create ancestor query for all key matches for this user
@@ -509,32 +550,30 @@ class ConferenceApi(remote.Service):
         for field in pf.all_fields():
             if hasattr(prof, field.name):
                 # convert t-shirt string to Enum; just copy others
-                if field.name == 'teeShirtSize':
-                    setattr(pf, field.name, getattr(TeeShirtSize, getattr(prof, field.name)))
-                else:
+                # if field.name == 'teeShirtSize':
+                #     setattr(pf, field.name, getattr(TeeShirtSize, getattr(prof, field.name)))
+                # else:
                     setattr(pf, field.name, getattr(prof, field.name))
         pf.check_initialized()
         return pf
 
 
-    def _getProfileFromUser(self):
+    def _getProfileFromUser(self, makeNew=True):
         """Return user Profile from datastore, creating new one if non-existent."""
         # make sure user is authed
-        user = endpoints.get_current_user()
-        if not user:
-            raise endpoints.UnauthorizedException('Authorization required')
-
-        # get Profile from datastore
+        user = check_current_user()
         user_id = getUserId(user)
+
         p_key = ndb.Key(Profile, user_id)
         profile = p_key.get()
+
         # create new Profile if not there
-        if not profile:
+        if not profile and makeNew:
             profile = Profile(
                 key = p_key,
                 displayName = user.nickname(),
                 mainEmail= user.email(),
-                teeShirtSize = str(TeeShirtSize.NOT_SPECIFIED),
+                # teeShirtSize = str(TeeShirtSize.NOT_SPECIFIED),
             )
             profile.put()
 
@@ -548,11 +587,12 @@ class ConferenceApi(remote.Service):
 
         # if saveProfile(), process user-modifyable fields
         if save_request:
-            for field in ('displayName', 'teeShirtSize'):
-                if hasattr(save_request, field):
-                    val = getattr(save_request, field)
+            # for field in ('displayName', 'teeShirtSize'):
+                # if hasattr(save_request, field):
+                    # val = getattr(save_request, field)
+                    val = getattr(save_request, 'displayName')
                     if val:
-                        setattr(prof, field, str(val))
+                        setattr(prof, 'displayName', str(val))
                         #if field == 'teeShirtSize':
                         #    setattr(prof, field, str(val).upper())
                         #else:
