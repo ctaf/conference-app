@@ -471,9 +471,6 @@ class ConferenceApi(remote.Service):
                       http_method='GET', name='getNonWorkshops')
     def getNonWorkshops(self, request):
         """Get non-workshop sessions starting before 7pm."""
-
-        validateUser()
-
         # Retrieve all non-workshop sessions, then all sessions starting before
         # 7pm. Finally, make the intersection of both sets.
         non_workshop = Session.query(Session.typeOfSession != 'workshop')
@@ -493,7 +490,6 @@ class ConferenceApi(remote.Service):
                       http_method='GET', name='getSessionsBySpeaker')
     def getSessionsBySpeaker(self, request):
         """Return all sessions given by a particular speaker."""
-        validateUser()
         # Create query for all key matches for this speaker.
         sessions = Session.query(
             Session.speakers.IN([request.websafeSpeakerKey]))
@@ -507,9 +503,7 @@ class ConferenceApi(remote.Service):
                       path='upcoming',
                       http_method='GET', name='getUpcomingConferences')
     def getUpcomingConferences(self, request):
-        """Return conferences created by user."""
-        validateUser()
-
+        """Return upcoming conferences (this and next month)."""
         # Retrieve all conferences held at the current or the next month.
         cur_mo = datetime.datetime.now().month
         confs = Conference.query(Conference.month >= cur_mo,
