@@ -3,3 +3,4 @@
   session
 * clean code from unnecessary parts, e.g. unneeded properties of conference
   model
+* check authorization for API methods
