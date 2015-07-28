@@ -2,6 +2,7 @@ import datetime
 import endpoints
 
 from protorpc import remote
+from protorpc import message_types
 
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
