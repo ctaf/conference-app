@@ -52,6 +52,7 @@ from utils import getUserId
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
 MEMCACHE_ANNOUNCEMENTS_KEY = "RECENT_ANNOUNCEMENTS"
+MEMCACHE_FEATURE_KEY = "CURRENT_FEATURE"
 ANNOUNCEMENT_TPL = ('Last chance to attend! The following conferences '
                     'are nearly sold out: %s')
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -158,7 +159,9 @@ class ConferenceApi(remote.Service):
                     setattr(cf, field.name, str(getattr(sess, field.name)))
                 # convert speaker objects to strings for SessionForm
                 elif field.name == 'speakers':
-                    setattr(cf, field.name, map(str, getattr(sess, field.name)))
+                    sp_names = [ndb.Key(urlsafe=sp).get().name for sp in
+                            getattr(sess, 'speakers')]
+                    setattr(cf, field.name, sp_names)
                 else:
                     setattr(cf, field.name, getattr(sess, field.name))
         cf.check_initialized()
@@ -247,7 +250,14 @@ class ConferenceApi(remote.Service):
                         s_key = Speaker(name=name).put()
                         data['speakers'].append(s_key.urlsafe())
                     else:
-                        data['speakers'].append(known_speaker.key.urlsafe())
+                        s_key = known_speaker.key.urlsafe()
+                        data['speakers'].append(s_key)
+
+                        if Session.query(Session.speakers.IN([s_key])):
+                            cache_entry = '%s|%s' %(known_speaker.name,
+                                    getattr(request, 'name'))
+                            memcache.set(request.websafeConferenceKey,
+                                    cache_entry)
 
             else:
                 data[field.name] = value
@@ -374,7 +384,7 @@ class ConferenceApi(remote.Service):
             path='bla/{websafeConferenceKey}',
             http_method='GET', name='getConferenceSpeakers')
     def getConferenceSpeakers(self, request):
-        """Return all sessions of a conference (by websafeConferenceKey)."""
+        """Return all speakers of a conference (by websafeConferenceKey)."""
         sessions = self._getSessions(request.websafeConferenceKey
                    ).fetch(projection=[Session.speakers])
 
@@ -691,6 +701,19 @@ class ConferenceApi(remote.Service):
             memcache.delete(MEMCACHE_ANNOUNCEMENTS_KEY)
 
         return announcement
+
+
+    @endpoints.method(CONF_GET_REQUEST, StringMessage,
+            path='feature/{websafeConferenceKey}', http_method='GET',
+            name='getFeaturedSpeaker')
+    def getFeaturedSpeaker(self, request):
+        """Return featured speaker from memcache."""
+        cache_entry = memcache.get(request.websafeConferenceKey)
+
+        if cache_entry:
+            return StringMessage(data=cache_entry.split('|')[0])
+        else:
+            return StringMessage(data='')
 
 
     @endpoints.method(message_types.VoidMessage, StringMessage,
