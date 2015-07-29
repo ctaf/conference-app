@@ -32,6 +32,14 @@ class ProfileForm(messages.Message):
     conferenceKeysToAttend = messages.StringField(4, repeated=True)
 
 
+class Speaker(ndb.Model):
+    """Speaker -- Speaker object"""
+    # No need to enforce required, as speakers cannot be created without a name
+    # anyway.
+    name = ndb.StringProperty()
+    email = ndb.StringProperty()
+
+
 class MultiStringMessage(messages.Message):
     """StringMessage-- outbound (single) string message"""
     data = messages.StringField(1, repeated=True)
@@ -45,11 +53,6 @@ class StringMessage(messages.Message):
 class BooleanMessage(messages.Message):
     """BooleanMessage-- outbound Boolean value message"""
     data = messages.BooleanField(1)
-
-
-class Speaker(ndb.Model):
-    """Speaker -- Speaker object"""
-    name = ndb.StringProperty(required=True)
 
 
 class Session(ndb.Model):

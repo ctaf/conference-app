@@ -318,7 +318,7 @@ class ConferenceApi(remote.Service):
 
             elif value and field.name == 'startTime':
                 data['startTime'] = datetime.datetime.strptime(
-                    value, "%I:%M %p").time()
+                    value, "%H:%M").time()
 
             elif value and field.name == 'speakers':
                 data['speakers'] = self._addSpeakers(request, value)
@@ -384,7 +384,7 @@ class ConferenceApi(remote.Service):
 # - - - Wishlists - - -
 
     @endpoints.method(WISH_POST_REQUEST, MultiStringMessage,
-                      path='wishlist/{sessionKey}',
+                      path='wishlist/{websafeSessionKey}',
                       http_method='POST', name='addSessionToWishlist')
     def addSessionToWishlist(self, request):
         """Adds the session to the current user's wishlist."""
@@ -392,12 +392,12 @@ class ConferenceApi(remote.Service):
         profile = self._getProfileFromUser(makeNew=False)
 
         # Check if session was already added.
-        if request.sessionKey in profile.sessionWishlist:
+        if request.websafeSessionKey in profile.sessionWishlist:
             raise ConflictException(
                 "This session is already on your wishlist.")
 
         # Add session to wishlist.
-        profile.sessionWishlist.append(request.sessionKey)
+        profile.sessionWishlist.append(request.websafeSessionKey)
         profile.put()
 
         session_names = [s.name for s in
@@ -486,14 +486,16 @@ class ConferenceApi(remote.Service):
 
 
     @endpoints.method(SESS_GET_REQUEST, SessionForms,
-                      path='speakers/{websafeSpeakerKey}',
+                      path='speaker/{websafeSpeakerKey}',
                       http_method='GET', name='getSessionsBySpeaker')
     def getSessionsBySpeaker(self, request):
         """Return all sessions given by a particular speaker."""
         # Create query for all key matches for this speaker.
+        print 'key: ', request.websafeSpeakerKey
         sessions = Session.query(
             Session.speakers.IN([request.websafeSpeakerKey]))
 
+        for s in sessions: print s
         return SessionForms(
             items=[self._copySessionToForm(sess) for sess in sessions]
         )

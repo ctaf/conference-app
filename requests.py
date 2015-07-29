@@ -22,7 +22,7 @@ TYPE_GET_REQUEST = endpoints.ResourceContainer(
 
 WISH_POST_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
-    sessionKey=messages.StringField(1),
+    websafeSessionKey=messages.StringField(1),
 )
 
 SESS_GET_REQUEST = endpoints.ResourceContainer(
