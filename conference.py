@@ -56,7 +56,7 @@ class ConferenceApi(remote.Service):
 
 # - - - Helper methods - - - - - - - - - - - - - - - - -
 
-    def _checkConf(conf):
+    def _checkConf(self, conf):
         if not conf:
             raise endpoints.NotFoundException('No conference found.')
 
