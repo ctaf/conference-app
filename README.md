@@ -132,6 +132,7 @@ Also, whenever a new session is created, and the supplied speaker already
 occurs in one or more other sessions within that conference, he or she becomes
 the featured speaker, whose name is also held in memcache, available via
 `getFeaturedSpeaker`.
+The corresponding memcache entry is set via the Task Queue API.
 
 
 ### API Reference

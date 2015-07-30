@@ -88,14 +88,15 @@ class ConferenceApi(remote.Service):
                 s_key = known_speaker.key.urlsafe()
                 keys.append(s_key)
 
-                # Add speaker as featured speaker to memcache, if there
-                # is at least one other session by this speaker at this
-                # conference.
+                # Add speaker as featured speaker to memcache using a task
+                # queue, if there is at least one other session by this speaker
+                # at this conference.
                 if Session.query(Session.speakers.IN([s_key])):
-                    cache_entry = '%s|%s' % (known_speaker.name,
-                                             getattr(request, 'name'))
-                    memcache.set(request.websafeConferenceKey,
-                                 cache_entry)
+                    taskqueue.add(params={
+                        'speaker': known_speaker.name,
+                        'session': getattr(request, 'name'),
+                        'wbsk': request.websafeConferenceKey},
+                        url='/tasks/set_feature')
         return keys
 
 
@@ -491,11 +492,9 @@ class ConferenceApi(remote.Service):
     def getSessionsBySpeaker(self, request):
         """Return all sessions given by a particular speaker."""
         # Create query for all key matches for this speaker.
-        print 'key: ', request.websafeSpeakerKey
         sessions = Session.query(
             Session.speakers.IN([request.websafeSpeakerKey]))
 
-        for s in sessions: print s
         return SessionForms(
             items=[self._copySessionToForm(sess) for sess in sessions]
         )
@@ -636,6 +635,50 @@ class ConferenceApi(remote.Service):
         """Update & return user profile."""
         return self._doProfile(request)
 
+# - - - Features speaker - - - - - - - - - - - - - - - - - - - -
+
+    # @staticmethod
+    # def _cacheFeature():
+    #     """Create features speaker & assign to memcache."""
+    #     confs = Conference.query().fetch(projection=[Conference.key,
+    #                                                  Conference.name])
+
+    #     # For each conference, get all speakers and determine the most common
+    #     # among them using the Counter class from the collections module.
+    #     for conf in confs:
+    #         wbsk = conf.name.urlsafe()
+    #         sessions = Session.query(ancestor=conf.key)
+    #         all_sp = (sp for se in sessions for sp in se.speakers)
+    #         most_com_sp, most_com_cnt = Counter(all_sp).most_common(1)
+
+    #         # If the most common one has more than one session at this
+    #         # conference, make it the featured speaker.
+    #         if most_com_cnt > 1:
+    #             sp_name = ndb.Key(urlsafe=most_com_sp).get().name
+    #             cache_entry = '%s|%s' % (sp_name, conf.name)
+    #             memcache.set(wbsk, cache_entry)
+
+    #         # If there is no speaker with more than one session,
+    #         # delete the memcache entry
+    #         else:
+    #             cache_entry = ""
+    #             memcache.delete(wbsk)
+
+    #     return cache_entry
+
+
+    @endpoints.method(CONF_GET_REQUEST, StringMessage,
+                      path='feature/{websafeConferenceKey}', http_method='GET',
+                      name='getFeaturedSpeaker')
+    def getFeaturedSpeaker(self, request):
+        """Return featured speaker from memcache."""
+        cache_entry = memcache.get(request.websafeConferenceKey)
+
+        # If there is a featured speaker in memcache, return its name.
+        if cache_entry:
+            return StringMessage(data=cache_entry.split('|')[0])
+        else:
+            return StringMessage(data='')
 
 # - - - Announcements - - - - - - - - - - - - - - - - - - - -
 
@@ -662,20 +705,6 @@ class ConferenceApi(remote.Service):
             memcache.delete(MEMCACHE_ANNOUNCEMENTS_KEY)
 
         return announcement
-
-
-    @endpoints.method(CONF_GET_REQUEST, StringMessage,
-                      path='feature/{websafeConferenceKey}', http_method='GET',
-                      name='getFeaturedSpeaker')
-    def getFeaturedSpeaker(self, request):
-        """Return featured speaker from memcache."""
-        cache_entry = memcache.get(request.websafeConferenceKey)
-
-        # If there is a featured speaker in memcache, return its name.
-        if cache_entry:
-            return StringMessage(data=cache_entry.split('|')[0])
-        else:
-            return StringMessage(data='')
 
 
     @endpoints.method(message_types.VoidMessage, StringMessage,
